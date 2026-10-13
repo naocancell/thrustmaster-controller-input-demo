@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图马斯特 HOTAS A-10C 飞行摇杆专业检测台 (优化版)</title>
+  <style>
+    :root {
+      --bg-primary: #0a0e14;
+      --bg-secondary: #121922;
+      --bg-card: #16202c;
+      --border-color: #26384a;
+      --hud-green: #00ff88;
+      --hud-green-glow: rgba(0, 255, 136, 0.4);
+      --hud-amber: #ffaa00;
+      --hud-amber-glow: rgba(255, 170, 0, 0.35);
+      --hud-cyan: #00d8ff;
+      --hud-red: #ff3b30;
+      --text-main: #e6f1ff;
+      --text-muted: #889bb0;
+      --font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.09) 0%, transparent 60%),
+        linear-gradient(rgba(18, 25, 34, 0.6) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(18, 25, 34, 0.6) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+    }
+
+    /* 顶部导航与状态条 */
+    header {
+      background: rgba(18, 25, 34, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--hud-green);
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      box-shadow: 0 0 12px var(--hud-green-glow);
+    }
+
+    .brand-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: 0.5px;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .brand-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(0, 255, 136, 0.15);
+      color: var(--hud-green);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+      font-family: var(--font-mono);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    select {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      outline: none;
+      font-size: 13px;
+      cursor: pointer;
+      min-width: 280px;
+    }
+
+    select:focus {
+      border-color: var(--hud-green);
+      box-shadow: 0 0 8px var(--hud-green-glow);
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(255, 59, 48, 0.12);
+      border: 1px solid rgba(255, 59, 48, 0.35);
+      color: var(--hud-red);
+      font-weight: 600;
+    }
+
+    .status-pill.connected {
+      background: rgba(0, 255, 136, 0.12);
+      border-color: rgba(0, 255, 136, 0.4);
+      color: var(--hud-green);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* 主要容器 */
+    main {
+      flex: 1;
+      max-width: 1540px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* 战术横幅提示 */
+    .banner-guide {
+      background: rgba(0, 216, 255, 0.08);
+      border: 1px solid rgba(0, 216, 255, 0.25);
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 13px;
+      color: #b0e5ff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* 主网格布局 */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1160px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title::before {
+      content: "";
+      width: 4px;
+      height: 14px;
+      background: var(--hud-green);
+      border-radius: 2px;
+      box-shadow: 0 0 6px var(--hud-green);
+    }
+
+    .panel-extra {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* 摇杆准星雷达 */
+    .radar-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .crosshair-canvas {
+      background: #080c10;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: inset 0 0 24px rgba(0, 255, 136, 0.05);
+    }
+
+    .axis-readout-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      gap: 10px;
+    }
+
+    .readout-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+    }
+
+    .readout-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .readout-val {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--hud-green);
+    }
+
+    /* 灰色蘑菇头专用配平罗盘 (Trim Hat) */
+    .trim-compass-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .trim-compass-view {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: #080d12;
+      border: 2px solid #203345;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .trim-label {
+      position: absolute;
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-weight: bold;
+    }
+    .trim-label.up { top: 4px; left: 50%; transform: translateX(-50%); }
+    .trim-label.down { bottom: 4px; left: 50%; transform: translateX(-50%); }
+    .trim-label.left { left: 4px; top: 50%; transform: translateY(-50%); }
+    .trim-label.right { right: 4px; top: 50%; transform: translateY(-50%); }
+
+    .trim-pointer-needle {
+      position: absolute;
+      width: 4px;
+      height: 38px;
+      background: linear-gradient(to top, transparent, var(--hud-amber));
+      bottom: 50%;
+      left: calc(50% - 2px);
+      transform-origin: bottom center;
+      border-radius: 2px;
+      opacity: 0;
+      transition: all 0.06s ease-out;
+    }
+
+    .trim-center-hub {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #1e2c3a;
+      border: 2px solid #455a6f;
+      z-index: 5;
+    }
+
+    .trim-center-hub.active {
+      background: var(--hud-amber);
+      border-color: #fff;
+      box-shadow: 0 0 10px var(--hud-amber);
+    }
+
+    .trim-meta {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .trim-meta-highlight {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--hud-amber);
+    }
+
+    /* 轴通道过滤与卡片 */
+    .axis-filter-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .filter-btn {
+      background: #172433;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .filter-btn.active {
+      background: rgba(0, 255, 136, 0.15);
+      border-color: var(--hud-green);
+      color: var(--hud-green);
+    }
+
+    .axes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .axis-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .axis-item.active-hardware {
+      border-left: 3px solid var(--hud-green);
+    }
+
+    .axis-item.idle-hardware {
+      opacity: 0.6;
+    }
+
+    .axis-item-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .axis-item-name {
+      color: var(--text-muted);
+    }
+
+    .axis-item-name strong {
+      color: var(--text-main);
+    }
+
+    .axis-item-val {
+      color: var(--hud-cyan);
+      font-weight: 700;
+    }
+
+    .axis-bar-track {
+      height: 8px;
+      background: #090e15;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #1a2736;
+    }
+
+    .axis-bar-midpoint {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.2);
+      z-index: 2;
+    }
+
+    .axis-bar-fill {
+      height: 100%;
+      position: absolute;
+      top: 0;
+      background: linear-gradient(90deg, #00d8ff, #00ff88);
+      border-radius: 4px;
+      transition: width 0.03s linear, left 0.03s linear;
+    }
+
+    /* A-10C 专属按键分区展示 */
+    .button-sections-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .btn-group-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .btn-group-title {
+      font-weight: 700;
+      color: var(--hud-cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-group-tag {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      background: #111a24;
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: var(--text-muted);
+    }
+
+    .btn-pill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+    }
+
+    .btn-pill {
+      background: #0c1219;
+      border: 1px solid #203142;
+      border-radius: 5px;
+      padding: 7px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      transition: all 0.05s ease;
+    }
+
+    .btn-pill-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .btn-pill-id {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .btn-pill-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: #ccd7e4;
+    }
+
+    .btn-pill-light {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #1a2533;
+      border: 1px solid #304154;
+      transition: all 0.05s ease;
+    }
+
+    .btn-pill.active {
+      background: rgba(0, 255, 136, 0.16);
+      border-color: var(--hud-green);
+      box-shadow: 0 0 10px var(--hud-green-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-pill.active .btn-pill-name {
+      color: var(--hud-green);
+    }
+
+    .btn-pill.active .btn-pill-light {
+      background: var(--hud-green);
+      border-color: #ffffff;
+      box-shadow: 0 0 8px var(--hud-green);
+    }
+
+    /* 底部按钮 */
+    .action-btn {
+      background: #1a2636;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .action-btn:hover {
+      background: #23344a;
+      border-color: var(--hud-green);
+      color: var(--hud-green);
+    }
+
+    .log-panel {
+      background: #080c10;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px;
+      height: 130px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: #a0c0e0;
+    }
+
+    .log-line {
+      display: flex;
+      gap: 10px;
+      padding: 2px 0;
+      border-bottom: 1px solid #0f151e;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部状态栏 -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon"></div>
+      <div>
+        <div class="brand-title">图马斯特 HOTAS A-10C 摇杆专业测试台</div>
+        <div class="brand-sub">Thrustmaster A-10C Warthog Flight Stick Precision Monitor</div>
+      </div>
+      <span class="brand-badge">优化专版</span>
+    </div>
+
+    <div class="header-controls">
+      <div style="font-size: 12px; color: var(--text-muted);">
+        当前设备:
+        <select id="gamepadSelect">
+          <option value="">等待检测手柄...</option>
+        </select>
+      </div>
+
+      <div id="statusPill" class="status-pill">
+        <div class="status-dot"></div>
+        <span id="statusText">等待设备就绪</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 提示条 -->
+    <div class="banner-guide">
+      <div>
+        <strong>📌 设备专属识别：</strong> 已针对 A-10C 摇杆做专属解析，<strong>灰色配平蘑菇头现已精准绑定至【轴通道 9】</strong>，B6-B18 各开关已按战机真实功能清晰分组！
+      </div>
+      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--hud-green);">
+        硬件架构: 纯机械阻尼 + 16位霍尔磁传感器 (无内置震动马达)
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      
+      <!-- 左侧：主姿态十字雷达 + 灰色配平蘑菇头专用罗盘 -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">主操纵杆姿态 (滚转 & 俯仰)</div>
+          <div class="panel-extra">轴 #0 (Roll) / 轴 #1 (Pitch)</div>
+        </div>
+
+        <div class="radar-box">
+          <canvas id="radarCanvas" class="crosshair-canvas" width="400" height="400"></canvas>
+          
+          <div class="axis-readout-row">
+            <div class="readout-card">
+              <span class="readout-label">X 轴 (横向滚转 Roll)</span>
+              <span class="readout-val" id="valAxisX">0.000</span>
+            </div>
+            <div class="readout-card">
+              <span class="readout-label">Y 轴 (纵向俯仰 Pitch)</span>
+              <span class="readout-val" id="valAxisY">0.000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 灰色配平蘑菇头专用罗盘 (Trim Hat) -->
+        <div class="panel-header" style="margin-top: 6px;">
+          <div class="panel-title">灰色配平蘑菇头 (Trim Hat - 轴 #9)</div>
+          <div class="panel-extra" id="trimRawVal">原始值: 0.000</div>
+        </div>
+
+        <div class="trim-compass-panel">
+          <div class="trim-compass-view">
+            <span class="trim-label up">NOSE DOWN</span>
+            <span class="trim-label down">NOSE UP</span>
+            <span class="trim-label left">LWD</span>
+            <span class="trim-label right">RWD</span>
+            <div id="trimNeedle" class="trim-pointer-needle"></div>
+            <div id="trimHub" class="trim-center-hub"></div>
+          </div>
+
+          <div class="trim-meta">
+            <div>当前配平状态: <span id="trimStateText" class="trim-meta-highlight">居中中立 (CENTER)</span></div>
+            <div>物理刻字指示: <span id="trimLabelDesc" style="color: var(--hud-cyan);">无动作</span></div>
+            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+              * 摇杆顶部带刻字的灰色大蘑菇头，负责低头、抬头、左翼倾、右翼倾配平
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- 右侧：轴通道过滤列表 + A-10C 按键战术分区 -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- 轴通道列表 -->
+        <section class="panel">
+          <div class="panel-header">
+            <div class="panel-title">模拟输入轴通道监控</div>
+            <div class="axis-filter-bar">
+              <span id="activeAxesCountText">活跃轴: 3 / 总通道: 10</span>
+              <button id="btnToggleAllAxes" class="filter-btn">显示全部 10 个预留轴</button>
+            </div>
+          </div>
+          <div id="axesContainer" class="axes-list"></div>
+        </section>
+
+        <!-- A-10C 专属按键分区阵列 -->
+        <section class="panel">
+          <div class="panel-header">
+            <div class="panel-title">A-10C 摇杆开关阵列 (战机真实功能分组)</div>
+            <div class="panel-extra">按键总数: 19 个</div>
+          </div>
+
+          <div class="button-sections-wrap">
+
+            <!-- 1. DMS 数据管理开关 (B6 - B9: 顺时针 前/右/后/左) -->
+            <div class="btn-group-card">
+              <div class="btn-group-header">
+                <span class="btn-group-title">DMS 数据管理开关 (Data Management Switch)</span>
+                <span class="btn-group-tag">B6 ~ B9 顺时针四向 (前/右/后/左)</span>
+              </div>
+              <div class="btn-pill-grid">
+                <div class="btn-pill" id="pill_btn_6">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B6</span><span class="btn-pill-name">DMS 前推 (FWD)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_7">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B7</span><span class="btn-pill-name">DMS 右推 (RIGHT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_8">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B8</span><span class="btn-pill-name">DMS 后拉 (AFT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_9">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B9</span><span class="btn-pill-name">DMS 左推 (LEFT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. TMS 目标管理开关 (B10 - B13: 顺时针 前/右/后/左) -->
+            <div class="btn-group-card">
+              <div class="btn-group-header">
+                <span class="btn-group-title">TMS 目标管理开关 (Target Management Switch)</span>
+                <span class="btn-group-tag">B10 ~ B13 顺时针四向 (前/右/后/左)</span>
+              </div>
+              <div class="btn-pill-grid">
+                <div class="btn-pill" id="pill_btn_10">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B10</span><span class="btn-pill-name">TMS 前推 (FWD)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_11">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B11</span><span class="btn-pill-name">TMS 右推 (RIGHT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_12">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B12</span><span class="btn-pill-name">TMS 后拉 (AFT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_13">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B13</span><span class="btn-pill-name">TMS 左推 (LEFT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. CMS 对抗管理开关 (B14 - B18: 顺时针 前/右/后/左 + 下按) -->
+            <div class="btn-group-card">
+              <div class="btn-group-header">
+                <span class="btn-group-title">CMS 干扰对抗开关 (Countermeasures Management)</span>
+                <span class="btn-group-tag">B14 ~ B18 顺时针四向 + 中心下按</span>
+              </div>
+              <div class="btn-pill-grid">
+                <div class="btn-pill" id="pill_btn_14">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B14</span><span class="btn-pill-name">CMS 前推 (FWD)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_15">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B15</span><span class="btn-pill-name">CMS 右推 (RIGHT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_16">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B16</span><span class="btn-pill-name">CMS 后拉 (AFT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_17">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B17</span><span class="btn-pill-name">CMS 左推 (LEFT)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_18">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B18</span><span class="btn-pill-name">CMS 中心下按 (PUSH)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. 扳机与武器释放开关 (B0 - B5) -->
+            <div class="btn-group-card">
+              <div class="btn-group-header">
+                <span class="btn-group-title">机炮扳机 / 武器释放 / 杆身操纵按键</span>
+                <span class="btn-group-tag">B0 ~ B5 战术开关</span>
+              </div>
+              <div class="btn-pill-grid">
+                <div class="btn-pill" id="pill_btn_0">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B0</span><span class="btn-pill-name">主扳机一段火 (Stage 1)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_5">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B5</span><span class="btn-pill-name">主扳机二段火 (Stage 2)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_1">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B1</span><span class="btn-pill-name">武器释放大红纽 (Release)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_2">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B2</span><span class="btn-pill-name">小指操纵杠杆 (Paddle)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_3">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B3</span><span class="btn-pill-name">小指侧面按钮 (Pinky)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+                <div class="btn-pill" id="pill_btn_4">
+                  <div class="btn-pill-info"><span class="btn-pill-id">B4</span><span class="btn-pill-name">前轮转向/断开 (NWS)</span></div>
+                  <div class="btn-pill-light"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- 底部日志流 -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">实时输入事件捕获 (输入流)</div>
+        <button id="btnClearLog" class="action-btn">清空日志</button>
+      </div>
+      <div id="logPanel" class="log-panel">
+        <div class="log-line">
+          <span style="color: var(--text-muted);">[系统就绪]</span>
+          <span style="color: var(--hud-green);">优化版检测台加载完成。请推动摇杆或按键以开始交互。</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    let selectedGamepadIndex = null;
+    let buttonStates = [];
+    let showAllAxes = false;
+
+    const gamepadSelect = document.getElementById('gamepadSelect');
+    const statusPill = document.getElementById('statusPill');
+    const statusText = document.getElementById('statusText');
+    const valAxisX = document.getElementById('valAxisX');
+    const valAxisY = document.getElementById('valAxisY');
+    const radarCanvas = document.getElementById('radarCanvas');
+    const trimRawVal = document.getElementById('trimRawVal');
+    const trimNeedle = document.getElementById('trimNeedle');
+    const trimHub = document.getElementById('trimHub');
+    const trimStateText = document.getElementById('trimStateText');
+    const trimLabelDesc = document.getElementById('trimLabelDesc');
+    const axesContainer = document.getElementById('axesContainer');
+    const activeAxesCountText = document.getElementById('activeAxesCountText');
+    const btnToggleAllAxes = document.getElementById('btnToggleAllAxes');
+    const logPanel = document.getElementById('logPanel');
+
+    const ctx = radarCanvas.getContext('2d');
+
+    // 日志记录函数
+    function addLog(msg) {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      const now = new Date();
+      const timeStr = `[${now.toTimeString().split(' ')[0]}.${String(now.getMilliseconds()).padStart(3, '0')}]`;
+      line.innerHTML = `<span style="color: var(--text-muted);">${timeStr}</span><span style="color: var(--hud-green);">${msg}</span>`;
+      logPanel.appendChild(line);
+      logPanel.scrollTop = logPanel.scrollHeight;
+      if (logPanel.children.length > 80) logPanel.removeChild(logPanel.firstChild);
+    }
+
+    // 切换是否显示全部 10 个预留轴
+    btnToggleAllAxes.addEventListener('click', () => {
+      showAllAxes = !showAllAxes;
+      btnToggleAllAxes.textContent = showAllAxes ? "仅显示当前活跃轴 (推荐)" : "显示全部 10 个预留轴";
+      btnToggleAllAxes.classList.toggle('active', showAllAxes);
+      axesContainer.innerHTML = '';
+    });
+
+    document.getElementById('btnClearLog').addEventListener('click', () => {
+      logPanel.innerHTML = '';
+      addLog('日志已清空');
+    });
+
+    // 绘制十字瞄准雷达
+    function drawRadar(axisX = 0, axisY = 0) {
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = w * 0.42;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // 背景网格同心圆
+      ctx.save();
+      ctx.strokeStyle = '#182736';
+      ctx.lineWidth = 1;
+      for (let r = radius / 3; r <= radius; r += radius / 3) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 十字基准线
+      ctx.beginPath();
+      ctx.moveTo(cx - radius, cy);
+      ctx.lineTo(cx + radius, cy);
+      ctx.moveTo(cx, cy - radius);
+      ctx.lineTo(cx, cy + radius);
+      ctx.stroke();
+
+      // 外圈高亮绿色圆环
+      ctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 目标位置映射
+      const posX = cx + axisX * radius;
+      const posY = cy + axisY * radius;
+
+      // 引导射线
+      ctx.strokeStyle = 'rgba(0, 255, 136, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(posX, posY);
+      ctx.stroke();
+
+      // 动态准星靶心
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#00ff88';
+      ctx.shadowBlur = 10;
+
+      ctx.beginPath();
+      ctx.arc(posX, posY, 10, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(posX - 14, posY);
+      ctx.lineTo(posX + 14, posY);
+      ctx.moveTo(posX, posY - 14);
+      ctx.lineTo(posX, posY + 14);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(posX, posY, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 解析灰色配平蘑菇头 (Trim Hat - 轴 #9)
+    function updateTrimHat(rawVal) {
+      trimRawVal.textContent = `原始值: ${(rawVal >= 0 ? '+' : '') + rawVal.toFixed(4)}`;
+
+      // DirectInput 在 Gamepad API 下常见编码：
+      // -1.000: 正北 (NOSE DOWN)
+      // -0.714: 东北
+      // -0.428: 正东 (RWD)
+      // -0.143: 东南
+      // +0.143: 正南 (NOSE UP)
+      // +0.428: 西南
+      // +0.714: 正西 (LWD)
+      // +1.000: 西北
+      // > 1.0 或 3.28 或未按压: 居中无动作
+      
+      let angle = null;
+      let stateName = "居中中立 (CENTER)";
+      let labelText = "无动作";
+
+      if (rawVal > 1.05 || (Math.abs(rawVal) < 0.001)) {
+        // 居中
+        angle = null;
+      } else if (rawVal <= -0.85 && rawVal >= -1.05) {
+        angle = 0;
+        stateName = "正北推力 (UP)";
+        labelText = "NOSE DOWN (机头俯下)";
+      } else if (rawVal > -0.85 && rawVal < -0.55) {
+        angle = 45;
+        stateName = "东北推力 (UP-RIGHT)";
+        labelText = "NOSE DOWN + RWD";
+      } else if (rawVal >= -0.55 && rawVal < -0.28) {
+        angle = 90;
+        stateName = "正东推力 (RIGHT)";
+        labelText = "RWD (右翼下倾配平)";
+      } else if (rawVal >= -0.28 && rawVal < 0.0) {
+        angle = 135;
+        stateName = "东南推力 (DOWN-RIGHT)";
+        labelText = "NOSE UP + RWD";
+      } else if (rawVal >= 0.0 && rawVal < 0.28) {
+        angle = 180;
+        stateName = "正南推力 (DOWN)";
+        labelText = "NOSE UP (机头上仰配平)";
+      } else if (rawVal >= 0.28 && rawVal < 0.58) {
+        angle = 225;
+        stateName = "西南推力 (DOWN-LEFT)";
+        labelText = "NOSE UP + LWD";
+      } else if (rawVal >= 0.58 && rawVal < 0.85) {
+        angle = 270;
+        stateName = "正西推力 (LEFT)";
+        labelText = "LWD (左翼下倾配平)";
+      } else if (rawVal >= 0.85 && rawVal <= 1.05) {
+        angle = 315;
+        stateName = "西北推力 (UP-LEFT)";
+        labelText = "NOSE DOWN + LWD";
+      }
+
+      if (angle !== null) {
+        trimNeedle.style.opacity = '1';
+        trimNeedle.style.transform = `rotate(${angle}deg)`;
+        trimHub.classList.add('active');
+        trimStateText.textContent = `${stateName} [${angle}°]`;
+        trimLabelDesc.textContent = labelText;
+      } else {
+        trimNeedle.style.opacity = '0';
+        trimHub.classList.remove('active');
+        trimStateText.textContent = "居中中立 (CENTER)";
+        trimLabelDesc.textContent = "无动作";
+      }
+    }
+
+    // 获取轴名称与描述
+    function getAxisMeta(index) {
+      switch (index) {
+        case 0: return { name: "X 轴 (主滚转 Roll)", active: true, desc: "左右横向操纵" };
+        case 1: return { name: "Y 轴 (主俯仰 Pitch)", active: true, desc: "前后推拉操纵" };
+        case 9: return { name: "轴 #9 (配平蘑菇头 Trim)", active: true, desc: "灰色 POV 角度" };
+        case 2: return { name: "预留轴 #2 (节流阀 Z)", active: false, desc: "摇杆单体未连接" };
+        case 3: return { name: "预留轴 #3 (尾舵 Rz)", active: false, desc: "摇杆单体无扭舵" };
+        case 4: return { name: "预留轴 #4 (Slider 1)", active: false, desc: "底座扩展轴" };
+        case 5: return { name: "预留轴 #5 (Slider 2)", active: false, desc: "底座扩展轴" };
+        case 6: return { name: "预留轴 #6 (Rx 旋转)", active: false, desc: "预留通道" };
+        case 7: return { name: "预留轴 #7 (Ry 旋转)", active: false, desc: "预留通道" };
+        case 8: return { name: "预留轴 #8 (通用旋钮)", active: false, desc: "预留通道" };
+        default: return { name: `轴 #${index}`, active: false, desc: "" };
+      }
+    }
+
+    // 主轮询循环
+    function pollGamepad() {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let gp = (selectedGamepadIndex !== null && gamepads[selectedGamepadIndex]) ? gamepads[selectedGamepadIndex] : null;
+
+      // 自动查找有效手柄
+      if (!gp) {
+        for (let i = 0; i < gamepads.length; i++) {
+          if (gamepads[i]) {
+            selectedGamepadIndex = i;
+            gp = gamepads[i];
+            break;
+          }
+        }
+      }
+
+      if (gp) {
+        statusPill.classList.add('connected');
+        statusText.textContent = `已连接: ${gp.id.split('(')[0]}`;
+
+        // 1. 读取主操纵杆姿态
+        const axisX = gp.axes[0] || 0;
+        const axisY = gp.axes[1] || 0;
+        valAxisX.textContent = (axisX >= 0 ? '+' : '') + axisX.toFixed(3);
+        valAxisY.textContent = (axisY >= 0 ? '+' : '') + axisY.toFixed(3);
+        drawRadar(axisX, axisY);
+
+        // 2. 读取灰色配平蘑菇头 (轴 #9)
+        const trimRaw = (gp.axes.length > 9) ? gp.axes[9] : 0;
+        updateTrimHat(trimRaw);
+
+        // 3. 动态渲染轴通道
+        const targetAxes = showAllAxes ? gp.axes.map((v, i) => i) : [0, 1, 9];
+        activeAxesCountText.textContent = `活跃轴: 3 / 总通道: ${gp.axes.length}`;
+
+        if (axesContainer.children.length !== targetAxes.length) {
+          axesContainer.innerHTML = '';
+          targetAxes.forEach(idx => {
+            const meta = getAxisMeta(idx);
+            const item = document.createElement('div');
+            item.className = `axis-item ${meta.active ? 'active-hardware' : 'idle-hardware'}`;
+            item.id = `axisBox_${idx}`;
+            item.innerHTML = `
+              <div class="axis-item-header">
+                <span class="axis-item-name"><strong>${meta.name}</strong> <span style="font-size: 10px; color: var(--text-muted);">${meta.desc}</span></span>
+                <span class="axis-item-val" id="axisNum_${idx}">0.000</span>
+              </div>
+              <div class="axis-bar-track">
+                <div class="axis-bar-midpoint"></div>
+                <div class="axis-bar-fill" id="axisBar_${idx}"></div>
+              </div>
+            `;
+            axesContainer.appendChild(item);
+          });
+        }
+
+        // 更新各轴数值
+        targetAxes.forEach(idx => {
+          const val = gp.axes[idx] || 0;
+          const numSpan = document.getElementById(`axisNum_${idx}`);
+          const bar = document.getElementById(`axisBar_${idx}`);
+          if (numSpan && bar) {
+            numSpan.textContent = (val >= 0 ? '+' : '') + val.toFixed(3);
+            const pct = Math.max(0, Math.min(100, ((val + 1) / 2) * 100));
+            if (val >= 0) {
+              bar.style.left = '50%';
+              bar.style.width = `${pct - 50}%`;
+            } else {
+              bar.style.left = `${pct}%`;
+              bar.style.width = `${50 - pct}%`;
+            }
+          }
+        });
+
+        // 4. 监听按键状态
+        if (buttonStates.length !== gp.buttons.length) {
+          buttonStates = new Array(gp.buttons.length).fill(false);
+        }
+
+        for (let b = 0; b < gp.buttons.length; b++) {
+          const btn = gp.buttons[b];
+          const pill = document.getElementById(`pill_btn_${b}`);
+          const isPressed = btn.pressed || btn.value > 0.1;
+
+          if (pill) {
+            pill.classList.toggle('active', isPressed);
+          }
+
+          if (isPressed !== buttonStates[b]) {
+            buttonStates[b] = isPressed;
+            const btnName = pill ? pill.querySelector('.btn-pill-name').textContent : `按键 #${b}`;
+            if (isPressed) {
+              addLog(`【按下】 ${btnName} (B${b})`);
+            } else {
+              addLog(`【释放】 ${btnName} (B${b})`);
+            }
+          }
+        }
+
+      } else {
+        statusPill.classList.remove('connected');
+        statusText.textContent = "未检测到手柄 (请拨动摇杆)";
+        drawRadar(0, 0);
+      }
+
+      requestAnimationFrame(pollGamepad);
+    }
+
+    // 更新设备列表下拉菜单
+    function updateDeviceList() {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      gamepadSelect.innerHTML = '';
+      let count = 0;
+      for (let i = 0; i < gamepads.length; i++) {
+        if (gamepads[i]) {
+          count++;
+          const opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = `[#${i}] ${gamepads[i].id}`;
+          gamepadSelect.appendChild(opt);
+        }
+      }
+      if (count === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = "等待手柄输入触发连接...";
+        gamepadSelect.appendChild(opt);
+      } else {
+        gamepadSelect.value = selectedGamepadIndex || 0;
+      }
+    }
+
+    window.addEventListener("gamepadconnected", (e) => {
+      addLog(`✨ 外设已识别接入: ${e.gamepad.id}`);
+      updateDeviceList();
+    });
+
+    window.addEventListener("gamepaddisconnected", (e) => {
+      addLog(`⚠️ 设备断开: ${e.gamepad.id}`);
+      updateDeviceList();
+    });
+
+    // 启动轮询
+    updateDeviceList();
+    drawRadar(0, 0);
+    requestAnimationFrame(pollGamepad);
+  </script>
+</body>
+</html>
